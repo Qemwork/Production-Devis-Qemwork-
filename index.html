@@ -770,7 +770,7 @@
               </div>
             </td>
             <td class="num place-depl">0 FCFA</td>
-            <td><input class="num place-heberg" type="number" value="2500"></td>
+            <td><input class="num place-heberg" type="number" value="0" min="0"></td>
             <td class="num place-total">0 FCFA</td>
             <td><button type="button" class="secondary btnDelLignePlacement">X</button></td>
           </tr>
@@ -3278,6 +3278,28 @@ function genererRecapParPhase() {
     totalMO: totalGlobalMOTTC
   };
 }
+
+
+(function () {
+  function toggleBlocPlacement() {
+    const missionEl = document.getElementById("missionType");
+    const bloc = document.getElementById("blocPlacement");
+    if (!missionEl || !bloc) return;
+
+    bloc.style.display = (missionEl.value === "placement") ? "block" : "none";
+  }
+
+  // Au chargement
+  document.addEventListener("DOMContentLoaded", toggleBlocPlacement);
+
+  // À chaque changement de mission
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.id === "missionType") {
+      toggleBlocPlacement();
+      if (typeof updateAllCalculations === "function") updateAllCalculations();
+    }
+  });
+})();
 
 /* ------------------------------------------------------------
    17. REMPLISSAGE DE LA FACE CLIENT
