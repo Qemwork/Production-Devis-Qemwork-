@@ -890,7 +890,6 @@
           <button type="button" class="secondary" id="btnClientShare">Partager</button>
           <button type="button" class="secondary" id="btnClientInvoice">Facture</button>
           <button type="button" class="secondary" id="btnClientHtml">Exporter de devis HTML (notes)</button>
-          <button type="button" class="primary" id="btnClientConfirm"> Confirmer devis</button>
         </div>
       </div>
     </div>
@@ -963,7 +962,7 @@
 <p>Les présentes Conditions Générales d'Utilisation (ci-après « CGU ») régissent l'utilisation des services de mise en relation proposés par QemWork, ci-après dénommée «</p>
 
 <h5>ARTICLE 1 - CHAMP D'APPLICATION</h5>
-<p>Les présentes Conditions Générales de Vente (CGV) s'appliquent à toutes les prestations de services proposées par QemWork (DIGITAL FACTORY SARL), immatriculée sous le numéro RCCM CM NSI 01 2025 B12 01096 du 05/06/2025, dont le siège social est situé au Dépôt de Sable – Etoudi, Yaoundé, Cameroun.</p>
+<p>Les présentes Conditions Générales de Vente (CGV) s'appliquent à toutes les prestations de services proposées par QemWork (DIGITAL FACTORY SARL), immatriculée sous le numéro RCCM CM NSI 01 2025 B12 01096, dont le siège social est situé au Dépôt de Sable – Etoudi, Yaoundé, Cameroun.</p>
 <p>Toute commande de prestation implique l'acceptation sans réserve par le Client des présentes CGV qui prévalent sur tout autre document, sauf accord écrit préalable de QemWork.</p>
 
 <h5>ARTICLE 2 - OBJET DES PRESTATIONS</h5>
@@ -1089,8 +1088,8 @@
 
 <h5>5.1 Moyens de Paiement Acceptés</h5>
 <ul>
-  <li>MTN Mobile Money : +237 6 76 59 17 25</li>
-  <li>Orange Money : /</li>
+  <li>ORANGE Mobile Money : #150*47#914946"DIGITAL FACTORY SARL" </li>
+  <li>MTN Mobile Money : /</li>
   <li>Virement bancaire : CM21 10005 00001 10798831001 – 05</li>
 </ul>
 <p>Le Client paie uniquement QemWork, jamais directement le technicien.</p>
@@ -1232,8 +1231,8 @@
     </tr>
   </thead>
   <tbody>
-    <tr><td>Jusqu'à 5 km</td><td>5 000 FCFA</td></tr>
-    <tr><td>6 à 15 km</td><td>10 000 FCFA</td></tr>
+    <tr><td>Jusqu'à 5 km</td><td>2 000 FCFA</td></tr>
+    <tr><td>6 à 15 km</td><td>5 000 FCFA</td></tr>
     <tr><td>16 à 30 km</td><td>15 000 FCFA</td></tr>
     <tr><td>Plus de 30 km</td><td>20 000 FCFA</td></tr>
   </tbody>
@@ -1607,7 +1606,7 @@
 <p>L'acceptation du devis vaut acceptation sans réserve des présentes Conditions Générales de Vente.</p>
 
 <p><strong>QemWork - DIGITAL FACTORY SARL</strong><br>
-RCCM : [Numéro]<br>
+RCCM : CM NSI 01 2025 B12 01096 <br>
 Siège social : Dépôt de sable, Etoudi, Yaoundé<br>
 Téléphone / WhatsApp : +237 6 76 59 17 28<br>
 Email : support@qemwork.com</p>
@@ -1765,6 +1764,48 @@ function fmt(v) {
   });
 })();
 
+/* =======================
+   1.c – POST PAYLOAD PAR FORMULAIRES CACHÉS
+   ======================= */
+function b64utf8(str) {
+  return btoa(unescape(encodeURIComponent(str || "")));
+}
+
+function postPayloadByForm(payloadObj, onDone) {
+  // on utilise un iframe invisible pour recevoir la réponse JSON sans quitter la page
+  const iframeName = "qw_post_iframe_" + Date.now();
+  const iframe = document.createElement("iframe");
+  iframe.name = iframeName;
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = DEVIS_WEBAPP_URL;
+  form.target = iframeName;
+  form.style.display = "none";
+
+  const inp = document.createElement("input");
+  inp.type = "hidden";
+  inp.name = "payload";
+  inp.value = JSON.stringify(payloadObj);
+
+  form.appendChild(inp);
+  document.body.appendChild(form);
+
+  iframe.onload = () => {
+    try {
+      const txt = iframe.contentDocument?.body?.innerText || "";
+      let json = null;
+      try { json = JSON.parse(txt); } catch(e) {}
+      onDone && onDone(json, txt);
+    } finally {
+      setTimeout(() => { form.remove(); iframe.remove(); }, 800);
+    }
+  };
+
+  form.submit();
+}
 /* =======================
    2. LISTES QEMWORK (quartiers, corps, interventions)
    ======================= */
@@ -3302,6 +3343,36 @@ function genererRecapParPhase() {
   });
 })();
 
+function buildMaterielTableHTML(lines) {
+  if (!lines || !lines.length) return "";
+
+  const totalMat = lines.reduce((s, l) => s + (l.total || 0), 0);
+
+  return (
+    '<h3>Détail matériel</h3>' +
+    '<table>' +
+      '<tr>' +
+        '<th>Désignation</th>' +
+        '<th style="text-align:right;">Qté</th>' +
+        '<th style="text-align:right;">PU TTC</th>' +
+        '<th style="text-align:right;">Total TTC</th>' +
+      '</tr>' +
+      lines.map(l =>
+        '<tr>' +
+          '<td>' + (l.desc || "") + '</td>' +
+          '<td style="text-align:right;">' + (l.qte || 0) + '</td>' +
+          '<td style="text-align:right;">' + fmt(l.pu || 0) + '</td>' +
+          '<td style="text-align:right;">' + fmt(l.total || 0) + '</td>' +
+        '</tr>'
+      ).join("") +
+      '<tr style="font-weight:bold;background:#f7f7f7;">' +
+        '<td colspan="3" style="text-align:right;">Total matériel</td>' +
+        '<td style="text-align:right;">' + fmt(totalMat) + '</td>' +
+      '</tr>' +
+    '</table>'
+  );
+}
+
 /* ------------------------------------------------------------
    17. REMPLISSAGE DE LA FACE CLIENT
 ------------------------------------------------------------ */
@@ -3402,9 +3473,66 @@ if (header) header.innerHTML = "";
 /* Bouton "Générer la face client" (interne → client) */
 document.getElementById("btnGenererClient").addEventListener("click", () => {
   remplirFaceClient();
+
+  // message UI existant
   alert("Face client mise à jour avec succès !");
-  // Bascule automatique sur l’onglet client
   document.querySelector('.tab[data-tab="client"]').click();
+
+  // --- déclenchement stockage + email (interne) ---
+  try {
+    const refMission = (document.getElementById("refMission")?.value || "").trim();
+    if (!refMission) return alert("Référence mission manquante: impossible de stocker/envoyer.");
+
+    // 1) Récap
+    const recapText = (buildWhatsappRecapFull() || "").replace(/\*/g, "");
+
+    // 2) Devis HTML (export autoportant)
+    const devisHtml = generateClientExportHTML();
+
+    // 3) Devis PDF HTML (sans CGV/validation) -> doit exister chez toi
+    const devisPdfHtml = buildClientPDFHTML_NoCGV_NoValidation();
+
+    // 4) Factures: TOTAL + phases
+    const phases = getPhases();
+    const invoices = [];
+
+    let total = 0;
+    phases.forEach(p => total += getPhaseTotal(p));
+    invoices.push({ label: "TOTAL", htmlBase64: b64utf8(buildInvoiceHTML("TOTAL", total)) });
+
+    phases.forEach(p => {
+      const amt = getPhaseTotal(p);
+      if (amt > 0) invoices.push({ label: p, htmlBase64: b64utf8(buildInvoiceHTML(p, amt)) });
+    });
+
+    const payload = {
+      action: "interneGenerateFaceClient",
+      devisNum: (document.getElementById("devisNum")?.value || ""),
+      refMission,
+      clientNom: (document.getElementById("clientNom")?.value || ""),
+      clientMail: (document.getElementById("clientMail")?.value || ""),
+      typeDevis: (document.getElementById("typeDevis")?.value || ""),
+      typeMission: (document.getElementById("missionType")?.value || ""),
+      recapText,
+
+      devisHtml: { filename: buildDevisFilename("html"), base64: b64utf8(devisHtml) },
+      devisPdfHtml: { filename: buildDevisFilename("pdf"), base64: b64utf8(devisPdfHtml) },
+
+      invoices
+    };
+
+    postPayloadByForm(payload, (json, rawTxt) => {
+      if (json && json.success) {
+        alert("Email envoyé + documents stockés dans Drive.\nDossier: " + (json.folderUrl || ""));
+      } else {
+        alert("Face client OK, mais envoi/stockage a échoué.\n" + ((json && json.error) ? json.error : rawTxt));
+      }
+    });
+
+  } catch (e) {
+    console.error(e);
+    alert("Face client OK, mais erreur envoi/stockage: " + (e.message || e));
+  }
 });
 
 /* ------------------------------------------------------------
@@ -3464,6 +3592,20 @@ function buildInvoiceHTML(phase, amount) {
 
   // Données détaillées pour la phase (ou global selon mode)
   const recapPhase = getPhaseRecapData(phase);
+  const matPhaseLines = getLinesMateriel().filter(l => l.phase === phase && (l.qte || l.pu || l.total));
+  const matTableHTML  = buildMaterielTableHTML(matPhaseLines);
+
+  let montantFacture = amount; // fallback
+
+if (phase === "TOTAL") {
+  // total client TTC global (si dispo)
+  montantFacture = recapPhase.totalFacture || (computeCommissions()?.totalClientTTC || amount);
+} else if (recapPhase.phase?.totalPhaseClient != null) {
+  // total TTC client pour la phase
+  montantFacture = recapPhase.phase.totalPhaseClient;
+} else if (recapPhase.isPlacement && recapPhase.totalFacture != null) {
+  montantFacture = recapPhase.totalFacture;
+}
 
   // Construction du bloc "tableau financier" selon le cas
   let financeBlock = "";
@@ -3596,7 +3738,8 @@ else if (recapPhase.isEstimatif) {
       '• Total main d\'œuvre TTC : ' + fmt(ph.totalMOP) + '<br>' +
       '• Total matériel TTC : ' + fmt(ph.totalMatP) + '<br>' +
       '• Total frais QemWork (frais front client) TTC : ' + fmt(ph.fraisFront) +
-      '</div>';
+      '</div>'+
+      matTableHTML;
   }
 
   // Gabarit final de la facture
@@ -3651,8 +3794,8 @@ else if (recapPhase.isEstimatif) {
     'Ville : ' + d.prestataire.ville +
     '</p>' +
 
-    '<h3>Montant</h3>' +
-    '<p class="total">' + formatFCFA(amount) + '</p>' +  
+    '<h3>Montant total facturé</h3>' +
+    '<p class="total">' + fmt(montantFacture) + '</p>' +
 
     financeBlock +
 
@@ -4148,6 +4291,26 @@ ${clone.outerHTML}
 <script>
 // ======== Script interne à l'export (validation + WhatsApp) ==========
 
+const DEVIS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzCqZsuCBwS-oNEUjbJ_YW-GK-QeB5nqF5bfyYOffFtthxm_c80D-LdaXITz9F5lIFV/exec";
+
+function postPayloadByFormNewTab(payloadObj) {
+  var form = document.createElement("form");
+  form.method = "POST";
+  form.action = DEVIS_WEBAPP_URL;
+  form.target = "_blank";
+  form.style.display = "none";
+
+  var inp = document.createElement("input");
+  inp.type = "hidden";
+  inp.name = "payload";
+  inp.value = JSON.stringify(payloadObj);
+
+  form.appendChild(inp);
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(function(){ form.remove(); }, 1200);
+}
+
 function checkClientValidationExport() {
   const lu = document.getElementById("clientLuApprouve");
   const decision = document.getElementById("clientDecision");
@@ -4218,68 +4381,61 @@ function handleClientValidationExport() {
   }
 
   if (decision === "refuse") {
-    // Cas REFUS
     extraPopup =
       "Nous avons pris note de votre décision de ne pas poursuivre avec cette offre. " +
       "N'hésitez pas à nous recontacter pour toute autre demande ou à laisser un commentaire pour nous évaluer. " +
       "Votre équipe Qemwork !";
   } else {
-    // Cas ACCEPTÉ
     if (typeDevis === "estimatif") {
-      // Acceptation ESTIMATIF
       extraPopup =
         "Nous avons pris note de votre confirmation, l'entreprise " + prestNom +
         " vous contactera dans les plus brefs délais afin de fixer un rdv pour une visite.";
     } else {
-      // Acceptation QUANTITATIF
       extraPopup =
         "Nous avons pris acte de votre confirmation, veuillez procéder au paiement du " +
-        (montant || "montant indiqué sur le devis") +
+        (montant || "montant indiqué sur le devis") + " FCFA" + 
         " afin que nous puissions procéder à la planification de vos travaux.";
     }
   }
 
-  // --- ENVOI EMAIL QEMWORK (export) ---
-try {
-  const payload = {
-    action: "exportClientValidation",
-    parentFolderId: "14EvGKNGJNFJOA20UxgwAbhsaDfLrhmqT",
-    folderName: (document.getElementById("clientDevisMetaInfos")?.innerText.match(/Mission\s*:\s*(.*)/)?.[1] || "MISSION_EXPORT").trim(),
-    recapText: recap + extra,
-    validation: {
-      decision,
-      signataire,
-      dateVal
-    }
-  };
-
-  fetch("https://script.google.com/macros/s/AKfycbwh4LBtHqNSmgvIjP-IHnxeMPCHtYVxe-EOh2XtJd-1DSPIPl4J7MVY-kxmi_ozmoZb/exec", {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload)
-  }).catch(function(){});
-} catch(e) {}
-
+  // IMPORTANT: construire extra AVANT l'envoi email
   const extra =
       "\\n--- Validation ---\\n" +
       "Décision : " + (decision === "accepte" ? "Devis accepté" : "Devis refusé") + "\\n" +
       "Signataire : " + signataire + "\\n" +
       "Date : " + dateVal + "\\n";
 
-  const fullMsg = recap + extra;
+  // Envoi des données de validation par formulaire POST vers Google Apps Script
+  try {
+    var meta = document.getElementById("clientDevisMetaInfos");
+    var refMission = "";
+    if (meta && meta.innerText) {
+      var m = meta.innerText.match(/Mission\\s*:\\s*(.*)/i);
+      if (m && m[1]) refMission = m[1].trim();
+    }
 
+    postPayloadByFormNewTab({
+      action: "clientValidationEmail",
+      refMission: refMission || "MISSION_SANS_REF",
+      recapText: recap + extra,
+      validation: { decision: decision, signataire: signataire, dateVal: dateVal }
+    });
+  } catch(e) {
+    // Optionnel: pour debug, décommente
+    // alert("Erreur envoi email: " + e);
+  }
+
+  const fullMsg = recap + extra;
   const url = "https://wa.me/237676591725?text=" + encodeURIComponent(fullMsg);
   window.open(url, "_blank");
+
   alert(extraPopup || "Validation enregistrée.");
 }
 window.addEventListener("load", () => {
   const btn = document.getElementById("btnClientPay");
-  if (btn) {
-      btn.addEventListener("click", handleClientValidationExport);
-  }
+  if (btn) btn.addEventListener("click", handleClientValidationExport);
 });
 <\/script>
-
 </body>
 </html>
 `;
@@ -4328,19 +4484,7 @@ function checkClientValidationFields() {
   return true;
 }
 
-/* 20.2 – Simulation d’un paiement */
-function simulatePayment(callback) {
 
-  alert(
-    "Redirection vers la plateforme de paiement sécurisé QemWork.\n" +
-    "Simulation de paiement en cours…"
-  );
-
-  setTimeout(() => {
-    alert("Paiement accepté ✔");
-    callback();
-  }, 1500);
-}
 
 /* 20.3 – Synchronisation interne après validation */
 function finalizeClientValidationSync() {
@@ -4372,9 +4516,9 @@ function refreshValidationButtonLabel() {
 
   const val = typeDevisEl.value;
   if (val === "estimatif") {
-    btn.textContent = "Je valide (estimatif)";
+    btn.textContent = "Je valide (pas de paiement requis)";
   } else if (val === "quantitatif") {
-    btn.textContent = "Je valide et procède au paiement (quantitatif)";
+    btn.textContent = "Je valide (paiement requis)";
   } else {
     btn.textContent = "Je valide";
   }
@@ -4394,182 +4538,78 @@ function refreshDevisTitle() {
 }
 
 /* 20.5 – Handler principal du bouton JE VALIDE (interne + WhatsApp) */
+/* 20.5 – Handler principal du bouton JE VALIDE (interne + WhatsApp) */
 const btnValidate = document.getElementById("btnClientPay");
 if (btnValidate) {
-
   btnValidate.addEventListener("click", function () {
-
     if (!checkClientValidationFields()) return;
 
     const typeDevis = document.getElementById("typeDevis")?.value;
     const recap = buildWhatsappRecapFull();
     const url = "https://wa.me/237676591725?text=" + encodeURIComponent(recap || "");
 
-    /* Estimatif : validation simple */
+    // Message (plus de paiement simulé)
     if (typeDevis === "estimatif") {
-
-      alert("Validation enregistrée (devis estimatif) – aucun paiement requis.");
-      finalizeClientValidationSync();
-
-      if (recap) window.open(url, "_blank");
-      return;
+      alert("Validation enregistrée (devis estimatif).");
+    } else if (typeDevis === "quantitatif") {
+      alert("Validation enregistrée (devis quantitatif).");
+    } else {
+      alert("Validation enregistrée.");
     }
 
-    /* Quantitatif : paiement simulé + validation */
-    if (typeDevis === "quantitatif") {
-
-      simulatePayment(() => {
-        alert("Devis validé et à payer immédiatement!");
-        finalizeClientValidationSync();
-        if (recap) window.open(url, "_blank");
-      });
-
-      return;
-    }
-
-    alert("Erreur : type de devis inconnu.");
+    finalizeClientValidationSync();
+    if (recap) window.open(url, "_blank");
   });
 }
-/* ------------------------------------------------------------
-   21. CONFIRMER DEVIS (Drive + Email)
------------------------------------------------------------- */
 
-const APPS_SCRIPT_URL = "COLLE_ICI_TON_URL_WEBAPP"; 
-const DRIVE_PARENT_FOLDER_ID = "14EvGKNGJNFJOA20UxgwAbhsaDfLrhmqT";
-
-function getMissionFolderName() {
-  return (document.getElementById("refMission")?.value || "").trim() || ("MISSION_" + Date.now());
-}
-
-function getDevisRecapTextPlain() {
-  const recap = buildWhatsappRecapFull() || "";
-  return recap.replace(/\*/g, "").replace(/📄|📌|🧱|💰|✏/g, "");
-}
-
-/** HTML export client (déjà existant), mais on l’utilise ici comme “devis client HTML” stocké sur Drive */
-function getClientExportHTMLForDrive() {
-  return generateClientExportHTML();
-}
-
-/** Construit le HTML “print” de la face client SANS CGV + validation pour PDF Drive */
+const DEVIS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzCqZsuCBwS-oNEUjbJ_YW-GK-QeB5nqF5bfyYOffFtthxm_c80D-LdaXITz9F5lIFV/exec";
 function buildClientPDFHTML_NoCGV_NoValidation() {
   const panel = document.getElementById("panel-client");
   if (!panel) return "";
 
   const clone = panel.cloneNode(true);
+
+  // Retirer CGV + validation
   clone.querySelector("#cgvBlock")?.remove();
   clone.querySelector(".client-validation")?.remove();
+
+  // Retirer les boutons de la copie
   clone.querySelector("#btnClientInvoice")?.remove();
   clone.querySelector("#btnClientHtml")?.remove();
   clone.querySelector("#btnClientPdf")?.remove();
   clone.querySelector("#btnClientShare")?.remove();
   clone.querySelector("#btnClientConfirm")?.remove();
 
+  // Styles existants
   const styleTag = document.querySelector("style");
   const baseStyles = styleTag ? styleTag.innerHTML : "";
 
   const filename = buildDevisFilename(); // sans extension
 
   return `
-  <html><head><meta charset="UTF-8"><title>${filename}</title>
-  <style>
-    *{box-sizing:border-box;}
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;padding:10px;background:#fff;}
-    @page{margin:12mm;}
-    button,.tabs-top{display:none!important;}
-    .page{box-shadow:none;border-radius:0;margin:0;}
-    ${baseStyles}
-  </style>
-  </head>
-  <body><div class="page">${clone.outerHTML}</div></body></html>`;
+  <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>${filename}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          margin: 0;
+          padding: 10px;
+          background: #fff;
+        }
+        @page { margin: 12mm; }
+        button, .tabs-top { display: none !important; }
+        .page { box-shadow: none; border-radius: 0; margin: 0; }
+        ${baseStyles}
+      </style>
+    </head>
+    <body>
+      <div class="page">${clone.outerHTML}</div>
+    </body>
+  </html>`;
 }
-
-/** Génère les HTML facture (phases + total) pour Drive */
-function buildAllInvoicesHTMLForDrive() {
-  const phases = getPhases();
-  const out = [];
-
-  // total
-  let total = 0;
-  phases.forEach(p => total += getPhaseTotal(p));
-  out.push({ label: "TOTAL", html: buildInvoiceHTML("TOTAL", total) });
-
-  // phases
-  phases.forEach(p => {
-    const amt = getPhaseTotal(p);
-    if (amt > 0) out.push({ label: p, html: buildInvoiceHTML(p, amt) });
-  });
-
-  return out;
-}
-
-/** Capture HTML -> PDF via Apps Script (HtmlService / Drive export) */
-async function sendToAppsScript(payload) {
-  const r = await fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" }, // évite certains blocages CORS préflight
-    body: JSON.stringify(payload)
-  });
-  const txt = await r.text();
-  let json;
-  try { json = JSON.parse(txt); } catch(e) { throw new Error("Réponse non-JSON AppsScript: " + txt); }
-  if (!json.ok) throw new Error(json.error || "Erreur Apps Script");
-  return json;
-}
-
-document.getElementById("btnClientConfirm")?.addEventListener("click", async () => {
-  try {
-    // s’assurer que la face client est à jour
-    remplirFaceClient();
-
-    const folderName = getMissionFolderName();
-
-    // 1) HTML devis client (export autoportant)
-    const devisHTML = getClientExportHTMLForDrive();
-
-    // 2) PDF devis client (sans CGV/validation)
-    const devisPdfHTML = buildClientPDFHTML_NoCGV_NoValidation();
-
-    // 3) Factures (HTML, Apps Script les convertit en PDF)
-    const invoices = buildAllInvoicesHTMLForDrive(); // [{label, html}...]
-
-    // 4) Email recap
-    const recapText = getDevisRecapTextPlain();
-    const folderLinkHint = "Dossier Drive (à créer): " + folderName;
-
-    const payload = {
-      action: "confirmDevis",
-      parentFolderId: DRIVE_PARENT_FOLDER_ID,
-      folderName,
-      devis: {
-        devisNum: document.getElementById("devisNum")?.value || "",
-        refMission: document.getElementById("refMission")?.value || "",
-        clientNom: document.getElementById("clientNom")?.value || "",
-        clientMail: document.getElementById("clientMail")?.value || ""
-      },
-      recapText,
-      files: [
-        { name: buildDevisFilename("html"), mime: "text/html", content: devisHTML, kind: "DEVIS_HTML" },
-        { name: buildDevisFilename("pdf"),  mime: "text/html", content: devisPdfHTML, kind: "DEVIS_PDF_FROM_HTML" }
-      ],
-      invoices: invoices.map(inv => ({
-        label: inv.label,
-        html: inv.html
-      }))
-    };
-
-    const res = await sendToAppsScript(payload);
-
-    alert(
-      "Confirmation envoyée à QemWork.\n" +
-      "Drive: " + (res.folderUrl || "(URL non retournée)")
-    );
-
-  } catch (e) {
-    console.error(e);
-    alert("Erreur confirmation devis : " + (e.message || e));
-  }
-});
 /* Fin PHASE 4/4 */
 </script>
 </body>
