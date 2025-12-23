@@ -890,6 +890,7 @@
           <button type="button" class="secondary" id="btnClientShare">Partager</button>
           <button type="button" class="secondary" id="btnClientInvoice">Facture</button>
           <button type="button" class="secondary" id="btnClientHtml">Exporter de devis HTML (notes)</button>
+          <button type="button" class="primary" id="btnClientConfirm"> Confirmer devis</button>
         </div>
       </div>
     </div>
@@ -953,7 +954,7 @@
     </div>
 
     <!-- CGV Client (résumé) -->
-    <div class="section">
+    <div class="section" id="cgvBlock">
       <div class="section-title">Conditions Générales QemWork applicables au client</div>
       <div class="client-legal" id="conditionsClient">
   <p>Date d'entrée en vigueur : 17 décembre 2025</p>
@@ -3650,17 +3651,8 @@ else if (recapPhase.isEstimatif) {
     'Ville : ' + d.prestataire.ville +
     '</p>' +
 
-    '<h3>Détail de la facture</h3>' +
-    '<table>' +
-    '<tr>' +
-    '<th>Phase facturée</th>' +
-    '<th>Montant TTC</th>' +
-    '</tr>' +
-    '<tr>' +
-    '<td>' + phase + '</td>' +
-    '<td class="total">' + formatFCFA(amount) + '</td>' +
-    '</tr>' +
-    '</table>' +
+    '<h3>Montant</h3>' +
+    '<p class="total">' + formatFCFA(amount) + '</p>' +  
 
     financeBlock +
 
@@ -4026,7 +4018,24 @@ document.getElementById("btnClientPdf")?.addEventListener("click", () => {
     </head>
     <body>
       <div class="page">
-        ${panel.outerHTML}
+        ${(function(){
+  const clone = panel.cloneNode(true);
+
+  // retirer CGV (id à adapter si nécessaire)
+  // tu as un gros bloc CGV: donne-lui un id côté HTML : id="cgvBlock"
+  clone.querySelector("#cgvBlock")?.remove();
+
+  // retirer validation
+  clone.querySelector(".client-validation")?.remove();
+
+  // retirer boutons
+  clone.querySelector("#btnClientInvoice")?.remove();
+  clone.querySelector("#btnClientHtml")?.remove();
+  clone.querySelector("#btnClientPdf")?.remove();
+  clone.querySelector("#btnClientShare")?.remove();
+
+  return clone.outerHTML;
+})()}
       </div>
     </body>
     </html>
@@ -4230,6 +4239,27 @@ function handleClientValidationExport() {
     }
   }
 
+  // --- ENVOI EMAIL QEMWORK (export) ---
+try {
+  const payload = {
+    action: "exportClientValidation",
+    parentFolderId: "14EvGKNGJNFJOA20UxgwAbhsaDfLrhmqT",
+    folderName: (document.getElementById("clientDevisMetaInfos")?.innerText.match(/Mission\s*:\s*(.*)/)?.[1] || "MISSION_EXPORT").trim(),
+    recapText: recap + extra,
+    validation: {
+      decision,
+      signataire,
+      dateVal
+    }
+  };
+
+  fetch("https://script.google.com/macros/s/AKfycbwh4LBtHqNSmgvIjP-IHnxeMPCHtYVxe-EOh2XtJd-1DSPIPl4J7MVY-kxmi_ozmoZb/exec", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload)
+  }).catch(function(){});
+} catch(e) {}
+
   const extra =
       "\\n--- Validation ---\\n" +
       "Décision : " + (decision === "accepte" ? "Devis accepté" : "Devis refusé") + "\\n" +
@@ -4242,7 +4272,6 @@ function handleClientValidationExport() {
   window.open(url, "_blank");
   alert(extraPopup || "Validation enregistrée.");
 }
-
 window.addEventListener("load", () => {
   const btn = document.getElementById("btnClientPay");
   if (btn) {
@@ -4401,7 +4430,146 @@ if (btnValidate) {
     alert("Erreur : type de devis inconnu.");
   });
 }
+/* ------------------------------------------------------------
+   21. CONFIRMER DEVIS (Drive + Email)
+------------------------------------------------------------ */
 
+const APPS_SCRIPT_URL = "COLLE_ICI_TON_URL_WEBAPP"; 
+const DRIVE_PARENT_FOLDER_ID = "14EvGKNGJNFJOA20UxgwAbhsaDfLrhmqT";
+
+function getMissionFolderName() {
+  return (document.getElementById("refMission")?.value || "").trim() || ("MISSION_" + Date.now());
+}
+
+function getDevisRecapTextPlain() {
+  const recap = buildWhatsappRecapFull() || "";
+  return recap.replace(/\*/g, "").replace(/📄|📌|🧱|💰|✏/g, "");
+}
+
+/** HTML export client (déjà existant), mais on l’utilise ici comme “devis client HTML” stocké sur Drive */
+function getClientExportHTMLForDrive() {
+  return generateClientExportHTML();
+}
+
+/** Construit le HTML “print” de la face client SANS CGV + validation pour PDF Drive */
+function buildClientPDFHTML_NoCGV_NoValidation() {
+  const panel = document.getElementById("panel-client");
+  if (!panel) return "";
+
+  const clone = panel.cloneNode(true);
+  clone.querySelector("#cgvBlock")?.remove();
+  clone.querySelector(".client-validation")?.remove();
+  clone.querySelector("#btnClientInvoice")?.remove();
+  clone.querySelector("#btnClientHtml")?.remove();
+  clone.querySelector("#btnClientPdf")?.remove();
+  clone.querySelector("#btnClientShare")?.remove();
+  clone.querySelector("#btnClientConfirm")?.remove();
+
+  const styleTag = document.querySelector("style");
+  const baseStyles = styleTag ? styleTag.innerHTML : "";
+
+  const filename = buildDevisFilename(); // sans extension
+
+  return `
+  <html><head><meta charset="UTF-8"><title>${filename}</title>
+  <style>
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;padding:10px;background:#fff;}
+    @page{margin:12mm;}
+    button,.tabs-top{display:none!important;}
+    .page{box-shadow:none;border-radius:0;margin:0;}
+    ${baseStyles}
+  </style>
+  </head>
+  <body><div class="page">${clone.outerHTML}</div></body></html>`;
+}
+
+/** Génère les HTML facture (phases + total) pour Drive */
+function buildAllInvoicesHTMLForDrive() {
+  const phases = getPhases();
+  const out = [];
+
+  // total
+  let total = 0;
+  phases.forEach(p => total += getPhaseTotal(p));
+  out.push({ label: "TOTAL", html: buildInvoiceHTML("TOTAL", total) });
+
+  // phases
+  phases.forEach(p => {
+    const amt = getPhaseTotal(p);
+    if (amt > 0) out.push({ label: p, html: buildInvoiceHTML(p, amt) });
+  });
+
+  return out;
+}
+
+/** Capture HTML -> PDF via Apps Script (HtmlService / Drive export) */
+async function sendToAppsScript(payload) {
+  const r = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // évite certains blocages CORS préflight
+    body: JSON.stringify(payload)
+  });
+  const txt = await r.text();
+  let json;
+  try { json = JSON.parse(txt); } catch(e) { throw new Error("Réponse non-JSON AppsScript: " + txt); }
+  if (!json.ok) throw new Error(json.error || "Erreur Apps Script");
+  return json;
+}
+
+document.getElementById("btnClientConfirm")?.addEventListener("click", async () => {
+  try {
+    // s’assurer que la face client est à jour
+    remplirFaceClient();
+
+    const folderName = getMissionFolderName();
+
+    // 1) HTML devis client (export autoportant)
+    const devisHTML = getClientExportHTMLForDrive();
+
+    // 2) PDF devis client (sans CGV/validation)
+    const devisPdfHTML = buildClientPDFHTML_NoCGV_NoValidation();
+
+    // 3) Factures (HTML, Apps Script les convertit en PDF)
+    const invoices = buildAllInvoicesHTMLForDrive(); // [{label, html}...]
+
+    // 4) Email recap
+    const recapText = getDevisRecapTextPlain();
+    const folderLinkHint = "Dossier Drive (à créer): " + folderName;
+
+    const payload = {
+      action: "confirmDevis",
+      parentFolderId: DRIVE_PARENT_FOLDER_ID,
+      folderName,
+      devis: {
+        devisNum: document.getElementById("devisNum")?.value || "",
+        refMission: document.getElementById("refMission")?.value || "",
+        clientNom: document.getElementById("clientNom")?.value || "",
+        clientMail: document.getElementById("clientMail")?.value || ""
+      },
+      recapText,
+      files: [
+        { name: buildDevisFilename("html"), mime: "text/html", content: devisHTML, kind: "DEVIS_HTML" },
+        { name: buildDevisFilename("pdf"),  mime: "text/html", content: devisPdfHTML, kind: "DEVIS_PDF_FROM_HTML" }
+      ],
+      invoices: invoices.map(inv => ({
+        label: inv.label,
+        html: inv.html
+      }))
+    };
+
+    const res = await sendToAppsScript(payload);
+
+    alert(
+      "Confirmation envoyée à QemWork.\n" +
+      "Drive: " + (res.folderUrl || "(URL non retournée)")
+    );
+
+  } catch (e) {
+    console.error(e);
+    alert("Erreur confirmation devis : " + (e.message || e));
+  }
+});
 /* Fin PHASE 4/4 */
 </script>
 </body>
